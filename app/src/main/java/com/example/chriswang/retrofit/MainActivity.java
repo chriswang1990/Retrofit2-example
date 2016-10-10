@@ -8,13 +8,16 @@ import android.widget.Toast;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
-import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 import retrofit2.Retrofit;
+import retrofit2.adapter.rxjava.RxJavaCallAdapterFactory;
 import retrofit2.converter.gson.GsonConverterFactory;
+import rx.Observable;
+import rx.Subscriber;
+import rx.Subscription;
+import rx.android.schedulers.AndroidSchedulers;
+import rx.schedulers.Schedulers;
 
-public class MainActivity extends Activity implements Callback<GithubUser> {
+public class MainActivity extends Activity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -29,30 +32,29 @@ public class MainActivity extends Activity implements Callback<GithubUser> {
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl(GithubUserAPI.ENDPOINT)
                 .addConverterFactory(GsonConverterFactory.create(gson))
+                .addCallAdapterFactory(RxJavaCallAdapterFactory.create())
                 .build();
 
         // prepare call in Retrofit 2.0
         GithubUserAPI githubUserAPI = retrofit.create(GithubUserAPI.class);
 
-        Call<GithubUser> call = githubUserAPI.getUser("vogella");
-        //asynchronous call
-        call.enqueue(this);
-    }
+        Observable<GithubUser> call = githubUserAPI.getUser("vogella");
+        final Subscription subscription = call.subscribeOn(Schedulers.io())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Subscriber<GithubUser>() {
+                    @Override
+                    public void onCompleted() {
+                    }
 
-    @Override
-    public void onResponse(Call<GithubUser> call, Response<GithubUser> response) {
-        int code = response.code();
-        if (code == 200) {
-            GithubUser user = response.body();
-            Toast.makeText(this, "Got the user: " + user.name, Toast.LENGTH_LONG).show();
-        } else {
-            Toast.makeText(this, "Did not work: " + String.valueOf(code), Toast.LENGTH_LONG).show();
-        }
-    }
+                    @Override
+                    public void onError(Throwable e) {
+                        Toast.makeText(MainActivity.this, "Did not work: " + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
 
-    @Override
-    public void onFailure(Call<GithubUser> call, Throwable t) {
-        Toast.makeText(this, "Nope", Toast.LENGTH_LONG).show();
-
+                    @Override
+                    public void onNext(GithubUser githubUser) {
+                        Toast.makeText(MainActivity.this, "Got the user: " + githubUser.name, Toast.LENGTH_LONG).show();
+                    }
+                });
     }
 }
